@@ -14,7 +14,9 @@ mod staking_tests {
     use milky_way::staking::BatchStatus;
     use osmosis_std::types::cosmos::base::v1beta1::Coin;
     use osmosis_std::types::ibc::applications::transfer::v1::MsgTransfer;
+    use osmosis_std::types::ibc::applications::transfer::v1::MsgTransferResponse;
     use osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgMint;
+    use serde::Serialize;
     use std::vec::Vec;
 
     #[test]
@@ -96,7 +98,10 @@ mod staking_tests {
         }
 
         // need to do this or we can't send more ibc messages
-        // IBC_WAITING_FOR_REPLY.remove(deps.as_mut().storage);
+        let sequence: u64 = 1; // Use a test sequence number
+        let transfer_response = MsgTransferResponse { sequence };
+        let response_data = serde_json::to_vec(&transfer_response).unwrap();
+
         let _result = reply(
             deps.as_mut(),
             mock_env(),
@@ -105,9 +110,9 @@ mod staking_tests {
                 payload: Binary::new(vec![]),
                 id: ibc_sub_msg_id,
                 result: SubMsgResult::Ok(SubMsgResponse {
-                    data: Some(Binary::new(Vec::new())), // No data returned
-                    events: Vec::new(),                  // No events
-                    msg_responses: Vec::new(),           // No messages
+                    data: Some(Binary::from(response_data)),
+                    events: Vec::new(),        // No events
+                    msg_responses: Vec::new(), // No messages needed
                 }),
             },
         );

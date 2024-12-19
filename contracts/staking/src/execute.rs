@@ -1058,45 +1058,24 @@ pub fn resume_contract(
 }
 
 pub fn handle_ibc_reply(deps: DepsMut, msg: cosmwasm_std::Reply) -> ContractResult<Response> {
-    println!("handle_ibc_reply: Starting with msg={:?}", msg);
-
     // Parse the result from the underlying chain call (IBC send)
     let SubMsgResult::Ok(SubMsgResponse { data: Some(b), .. }) = msg.result else {
-        println!("handle_ibc_reply: Error - Failed to parse IBC reply result");
         return Err(ContractError::FailedIBCTransfer {
             msg: format!("failed reply: {:?}", msg.result),
         });
     };
 
-    println!("handle_ibc_reply: Successfully parsed IBC reply result of length");
-    println!("handle_ibc_reply: {:?}", b.len());
-
     // The response contains the packet sequence. This is needed to be able to
     // ensure that, if there is a delivery failure, the packet that failed is
     // the same one that we stored recovery information for
-    let transfer_response: MsgTransferResponse = serde_json::from_slice(&b[..]).map_err(|_e| {
-        println!("handle_ibc_reply: Error - Failed to decode transfer response");
-        ContractError::FailedIBCTransfer {
+    let transfer_response: MsgTransferResponse =
+        serde_json::from_slice(&b[..]).map_err(|_e| ContractError::FailedIBCTransfer {
             msg: format!("could not decode response: {b}"),
-        }
-    })?;
-
-    println!(
-        "handle_ibc_reply: Successfully decoded transfer response: {:?}",
-        transfer_response
-    );
+        })?;
 
     let IbcWaitingForReply { amount } = IBC_WAITING_FOR_REPLY.load(deps.storage, msg.id)?;
-    println!(
-        "handle_ibc_reply: Loaded IbcWaitingForReply with amount={}",
-        amount
-    );
 
     IBC_WAITING_FOR_REPLY.remove(deps.storage, msg.id);
-    println!(
-        "handle_ibc_reply: Removed IbcWaitingForReply for msg_id={}",
-        msg.id
-    );
 
     let recovery = IBCTransfer {
         sequence: transfer_response.sequence,
@@ -1104,14 +1083,8 @@ pub fn handle_ibc_reply(deps: DepsMut, msg: cosmwasm_std::Reply) -> ContractResu
         status: PacketLifecycleStatus::Sent,
     };
 
-    println!("handle_ibc_reply: Created recovery info: {:?}", recovery);
-
     // Save as in-flight to be able to manipulate when the ack/timeout is received
     INFLIGHT_PACKETS.save(deps.storage, transfer_response.sequence, &recovery)?;
-    println!(
-        "handle_ibc_reply: Saved inflight packet with sequence={}",
-        transfer_response.sequence
-    );
 
     let response = Response::new()
         .add_attribute("action", "handle_ibc_reply")
