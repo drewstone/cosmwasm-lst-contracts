@@ -27,8 +27,11 @@ fn proper_liquid_unstake() {
     STATE.save(&mut deps.storage, &state).unwrap();
 
     let info = message_info(
-        &Addr::unchecked("bob"),
-        &coins(1000, "factory/cosmos2contract/stTIA"),
+        &deps.api.addr_make("bob"),
+        &coins(
+            1000,
+            format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
+        ),
     );
     let msg = ExecuteMsg::LiquidUnstake {};
     let mut res = execute(deps.as_mut(), mock_env(), info.clone(), msg);
@@ -73,16 +76,22 @@ fn double_liquid_unstake() {
 
     // Bob unstakes 500
     let info = message_info(
-        &Addr::unchecked("bob"),
-        &coins(500, "factory/cosmos2contract/stTIA"),
+        &deps.api.addr_make("bob"),
+        &coins(
+            500,
+            format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
+        ),
     );
     let mut res = execute(deps.as_mut(), mock_env(), info, msg.clone());
     assert!(res.is_ok());
 
     // Bob unstakes 1_000
     let info = message_info(
-        &Addr::unchecked("bob"),
-        &coins(1_000, "factory/cosmos2contract/stTIA"),
+        &deps.api.addr_make("bob"),
+        &coins(
+            1_000,
+            format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
+        ),
     );
     res = execute(deps.as_mut(), mock_env(), info, msg.clone());
     assert!(res.is_ok());
@@ -101,8 +110,11 @@ fn double_liquid_unstake() {
 
     // Alice unstakes 5_000
     let info = message_info(
-        &Addr::unchecked("alice"),
-        &coins(5_000, "factory/cosmos2contract/stTIA"),
+        &deps.api.addr_make("alice"),
+        &coins(
+            5_000,
+            format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
+        ),
     );
     res = execute(deps.as_mut(), mock_env(), info.clone(), msg);
     assert!(res.is_ok());
@@ -166,7 +178,10 @@ fn double_liquid_unstake() {
             msg: <MsgBurn as Into<CosmosMsg>>::into(MsgBurn {
                 sender: Addr::unchecked(MOCK_CONTRACT_ADDR).to_string(),
                 amount: Some(Coin {
-                    denom: "factory/cosmos2contract/stTIA".to_string(),
+                    denom: format!(
+                        "factory/{}/stTIA",
+                        deps.api.addr_make("cosmos2contract").to_string()
+                    ),
                     amount: "6500".to_string(),
                 }),
                 burn_from_address: Addr::unchecked(MOCK_CONTRACT_ADDR).to_string(),
@@ -192,7 +207,10 @@ fn invalid_denom_liquid_unstake() {
     state.total_native_token = Uint128::from(300_000u128);
     STATE.save(&mut deps.storage, &state).unwrap();
 
-    let info = message_info(&Addr::unchecked("bob"), &coins(1000, "factory/bob/stTIA"));
+    let info = message_info(
+        &deps.api.addr_make("bob"),
+        &coins(1000, "factory/bob/stTIA"),
+    );
     let msg = ExecuteMsg::LiquidUnstake {};
 
     let res = execute(deps.as_mut(), mock_env(), info, msg);
@@ -222,7 +240,7 @@ fn receive_unstaked_tokens() {
     .unwrap();
 
     let info = message_info(
-        &Addr::unchecked(sender),
+        &Addr::unchecked(&sender),
         &[cosmwasm_std::Coin {
             amount: Uint128::from(100u128),
             denom: config.native_token_denom.clone(),
@@ -264,8 +282,11 @@ fn invalid_amount_liquid_unstake() {
     STATE.save(&mut deps.storage, &state).unwrap();
 
     let info = message_info(
-        &Addr::unchecked("bob"),
-        &coins(1_000_000_000, "factory/cosmos2contract/stTIA"),
+        &deps.api.addr_make("bob"),
+        &coins(
+            1_000_000_000,
+            format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
+        ),
     );
     let msg = ExecuteMsg::LiquidUnstake {};
 
@@ -322,8 +343,11 @@ fn total_liquid_stake_token_with_zero() {
     STATE.save(&mut deps.storage, &state).unwrap();
 
     let info = message_info(
-        &Addr::unchecked("bob"),
-        &coins(1_000_000_000, "factory/cosmos2contract/stTIA"),
+        &deps.api.addr_make("bob"),
+        &coins(
+            1_000_000_000,
+            format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
+        ),
     );
     let msg = ExecuteMsg::LiquidUnstake {};
 
@@ -404,7 +428,7 @@ fn claimable_batches() {
         deps.as_ref(),
         mock_env(),
         QueryMsg::UnstakeRequests {
-            user: Addr::unchecked("bob"),
+            user: deps.api.addr_make("bob"),
         },
     );
     assert!(unstake_requests_res.is_ok());
@@ -422,7 +446,7 @@ fn claimable_batches() {
     let msg = ExecuteMsg::ReceiveUnstakedTokens { batch_id: 1 };
     let info = message_info(
         &Addr::unchecked(
-            derive_intermediate_sender(
+            &derive_intermediate_sender(
                 &CONFIG.load(&deps.storage).unwrap().ibc_channel_id,
                 CONFIG
                     .load(&deps.storage)
@@ -446,7 +470,7 @@ fn claimable_batches() {
         deps.as_ref(),
         mock_env(),
         QueryMsg::UnstakeRequests {
-            user: Addr::unchecked("bob"),
+            user: deps.api.addr_make("bob"),
         },
     );
     assert!(unstake_requests_res.is_ok());
