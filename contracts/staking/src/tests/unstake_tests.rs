@@ -26,8 +26,9 @@ fn proper_liquid_unstake() {
     state.total_liquid_stake_token = Uint128::from(100_000u128);
     STATE.save(&mut deps.storage, &state).unwrap();
 
+    let bob_addr = deps.api.addr_make("bob");
     let info = message_info(
-        &deps.api.addr_make("bob"),
+        &bob_addr,
         &coins(
             1000,
             format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
@@ -39,7 +40,7 @@ fn proper_liquid_unstake() {
     let attrs = resp.attributes;
 
     assert_eq!(attrs[0].value, "liquid_unstake");
-    assert_eq!(attrs[1].value, "bob"); // sender
+    assert_eq!(attrs[1].value, bob_addr.to_string()); // sender
     assert_eq!(attrs[2].value, "1"); // batch id
     assert_eq!(attrs[3].value, "1000"); // amount
 
@@ -75,8 +76,9 @@ fn double_liquid_unstake() {
     let msg = ExecuteMsg::LiquidUnstake {};
 
     // Bob unstakes 500
+    let bob_addr = deps.api.addr_make("bob");
     let info = message_info(
-        &deps.api.addr_make("bob"),
+        &bob_addr,
         &coins(
             500,
             format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
@@ -87,7 +89,7 @@ fn double_liquid_unstake() {
 
     // Bob unstakes 1_000
     let info = message_info(
-        &deps.api.addr_make("bob"),
+        &bob_addr,
         &coins(
             1_000,
             format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
@@ -109,8 +111,9 @@ fn double_liquid_unstake() {
     );
 
     // Alice unstakes 5_000
+    let alice_addr = deps.api.addr_make("alice");
     let info = message_info(
-        &deps.api.addr_make("alice"),
+        &alice_addr,
         &coins(
             5_000,
             format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
@@ -140,7 +143,7 @@ fn double_liquid_unstake() {
     assert_eq!(
         unstake_requests_records
             .iter()
-            .find(|v| v.0 == "bob")
+            .find(|v| v.0 == bob_addr.to_string())
             .unwrap()
             .2,
         Uint128::from(1500u128)
@@ -148,7 +151,7 @@ fn double_liquid_unstake() {
     assert_eq!(
         unstake_requests_records
             .iter()
-            .find(|v| v.0 == "alice")
+            .find(|v| v.0 == alice_addr.to_string())
             .unwrap()
             .2,
         Uint128::from(5000u128)
@@ -281,8 +284,9 @@ fn invalid_amount_liquid_unstake() {
     state.total_native_token = Uint128::from(300_000u128);
     STATE.save(&mut deps.storage, &state).unwrap();
 
+    let bob_addr = deps.api.addr_make("bob");
     let info = message_info(
-        &deps.api.addr_make("bob"),
+        &bob_addr,
         &coins(
             1_000_000_000,
             format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
@@ -295,7 +299,7 @@ fn invalid_amount_liquid_unstake() {
 
     let attrs = resp.attributes;
     assert_eq!(attrs[0].value, "liquid_unstake");
-    assert_eq!(attrs[1].value, "bob"); // sender
+    assert_eq!(attrs[1].value, bob_addr.to_string()); // sender
     assert_eq!(attrs[2].value, "1"); // batch id
     assert_eq!(attrs[3].value, "1000000000");
 
@@ -342,8 +346,9 @@ fn total_liquid_stake_token_with_zero() {
     state.total_native_token = Uint128::from(300_000u128);
     STATE.save(&mut deps.storage, &state).unwrap();
 
+    let bob_addr = deps.api.addr_make("bob");
     let info = message_info(
-        &deps.api.addr_make("bob"),
+        &bob_addr,
         &coins(
             1_000_000_000,
             format!("factory/{}/stTIA", deps.api.addr_make("cosmos2contract")),
@@ -356,7 +361,7 @@ fn total_liquid_stake_token_with_zero() {
 
     let attrs = resp.attributes;
     assert_eq!(attrs[0].value, "liquid_unstake");
-    assert_eq!(attrs[1].value, "bob"); // sender
+    assert_eq!(attrs[1].value, bob_addr.to_string()); // sender
     assert_eq!(attrs[2].value, "1"); // batch id
     assert_eq!(attrs[3].value, "1000000000");
 
@@ -404,9 +409,10 @@ fn claimable_batches() {
     STATE.save(&mut deps.storage, &state).unwrap();
 
     let batch_1 = Batch::new(1, Uint128::from(1000u128), 1000);
+    let bob_addr = deps.api.addr_make("bob");
     new_unstake_request(
         &mut deps.as_mut(),
-        "bob".to_string(),
+        bob_addr.to_string(),
         1,
         Uint128::from(1000u128),
     )
@@ -414,7 +420,7 @@ fn claimable_batches() {
     let batch_2 = Batch::new(2, Uint128::from(1000u128), 1000);
     new_unstake_request(
         &mut deps.as_mut(),
-        "bob".to_string(),
+        bob_addr.to_string(),
         2,
         Uint128::from(1000u128),
     )
@@ -428,7 +434,7 @@ fn claimable_batches() {
         deps.as_ref(),
         mock_env(),
         QueryMsg::UnstakeRequests {
-            user: deps.api.addr_make("bob"),
+            user: bob_addr.clone(),
         },
     );
     assert!(unstake_requests_res.is_ok());
@@ -469,9 +475,7 @@ fn claimable_batches() {
     let unstake_requests_res = query(
         deps.as_ref(),
         mock_env(),
-        QueryMsg::UnstakeRequests {
-            user: deps.api.addr_make("bob"),
-        },
+        QueryMsg::UnstakeRequests { user: bob_addr },
     );
     assert!(unstake_requests_res.is_ok());
     let unstake_requests_res = from_json::<Vec<UnstakeRequest>>(&unstake_requests_res.unwrap());

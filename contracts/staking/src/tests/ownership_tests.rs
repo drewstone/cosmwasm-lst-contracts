@@ -9,7 +9,7 @@ fn proper_transfer_ownership() {
     let mut deps = init();
     let info = message_info(&Addr::unchecked(OSMO3), &coins(1000, "uosmo"));
     let msg = ExecuteMsg::TransferOwnership {
-        new_owner: "new_owner".to_string(),
+        new_owner: deps.api.addr_make("new_owner").to_string(),
     };
 
     let res = execute(deps.as_mut(), mock_env(), info, msg);
@@ -17,7 +17,7 @@ fn proper_transfer_ownership() {
 
     let attrs = res.unwrap().attributes;
     assert_eq!(attrs[0].value, "transfer_ownership");
-    assert_eq!(attrs[1].value, "new_owner");
+    assert_eq!(attrs[1].value, deps.api.addr_make("new_owner").to_string());
 }
 
 #[test]
@@ -25,7 +25,7 @@ fn non_admin_transfer_ownership() {
     let mut deps = init();
     let info = message_info(&deps.api.addr_make("bob"), &coins(1000, "uosmo"));
     let msg = ExecuteMsg::TransferOwnership {
-        new_owner: "new_owner".to_string(),
+        new_owner: deps.api.addr_make("new_owner").to_string(),
     };
 
     let res = execute(deps.as_mut(), mock_env(), info, msg);
@@ -37,7 +37,7 @@ fn proper_claim_ownership() {
     let mut deps = init();
     let info = message_info(&Addr::unchecked(OSMO3), &coins(1000, "uosmo"));
     let msg = ExecuteMsg::TransferOwnership {
-        new_owner: "new_owner".to_string(),
+        new_owner: deps.api.addr_make("new_owner").to_string(),
     };
 
     let mut env = mock_env();
@@ -58,7 +58,7 @@ fn proper_claim_ownership() {
 
     let attrs = res.unwrap().attributes;
     assert_eq!(attrs[0].value, "accept_ownership");
-    assert_eq!(attrs[1].value, "new_owner");
+    assert_eq!(attrs[1].value, deps.api.addr_make("new_owner").to_string());
 }
 
 #[test]
@@ -66,7 +66,7 @@ fn unauthorized_claim_ownership() {
     let mut deps = init();
     let info = message_info(&Addr::unchecked(OSMO3), &coins(1000, "uosmo"));
     let msg = ExecuteMsg::TransferOwnership {
-        new_owner: "new_owner".to_string(),
+        new_owner: deps.api.addr_make("new_owner").to_string(),
     };
 
     let res = execute(deps.as_mut(), mock_env(), info, msg);
@@ -85,7 +85,7 @@ fn proper_revoke_ownership_transfer() {
     let mut deps = init();
     let info = message_info(&Addr::unchecked(OSMO3), &coins(1000, "uosmo"));
     let msg = ExecuteMsg::TransferOwnership {
-        new_owner: "new_owner".to_string(),
+        new_owner: deps.api.addr_make("new_owner").to_string(),
     };
 
     let res = execute(deps.as_mut(), mock_env(), info, msg);

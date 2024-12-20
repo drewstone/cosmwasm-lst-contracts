@@ -487,34 +487,58 @@ pub fn execute_withdraw(
     info: MessageInfo,
     batch_id: u64,
 ) -> ContractResult<Response> {
+    println!("execute_withdraw: Starting with batch_id={}", batch_id);
+
     let config: Config = CONFIG.load(deps.storage)?;
+    println!("execute_withdraw: Loaded config: {:?}", config);
 
     check_stopped(&config)?;
+    println!("execute_withdraw: Contract not stopped");
 
     let _batch = BATCHES.load(deps.storage, batch_id);
     if _batch.is_err() {
+        println!("execute_withdraw: Error - Batch {} not found", batch_id);
         return Err(ContractError::BatchEmpty {});
     }
     let batch = _batch.unwrap();
+    println!("execute_withdraw: Loaded batch: {:?}", batch);
 
     if batch.status != BatchStatus::Received {
+        println!(
+            "execute_withdraw: Error - Tokens already claimed for batch {}",
+            batch.id
+        );
         return Err(ContractError::TokensAlreadyClaimed { batch_id: batch.id });
     }
     let received_native_unstaked = batch.received_native_unstaked.as_ref().unwrap();
+    println!(
+        "execute_withdraw: Received native unstaked amount: {}",
+        received_native_unstaked
+    );
 
     let _liquid_unstake_request =
         unstake_requests().may_load(deps.storage, (batch.id, info.sender.to_string()))?;
     if _liquid_unstake_request.is_none() {
+        println!("execute_withdraw: Error - No unstake request found in batch");
         return Err(ContractError::NoRequestInBatch {});
     }
 
     let unstake_request_amount = _liquid_unstake_request.unwrap().amount;
+    println!(
+        "execute_withdraw: Unstake request amount: {}",
+        unstake_request_amount
+    );
 
     let amount = received_native_unstaked
         .multiply_ratio(unstake_request_amount, batch.batch_total_liquid_stake);
+    println!("execute_withdraw: Calculated withdraw amount: {}", amount);
 
     // TODO: if all liquid unstake requests have been withdrawn, delete the batch?
     remove_unstake_request(&mut deps, info.sender.to_string(), batch.id)?;
+    println!(
+        "execute_withdraw: Removed unstake request for sender {} in batch {}",
+        info.sender, batch.id
+    );
 
     let mut messages: Vec<CosmosMsg> = vec![];
     let send_msg = MsgSend {
@@ -526,8 +550,12 @@ pub fn execute_withdraw(
         }],
     };
     messages.push(send_msg.into());
+    println!("execute_withdraw: Created send message");
 
     let update_oracle_msgs = update_oracle_msgs(deps.as_ref(), env, &config)?;
+    println!("execute_withdraw: Created oracle update messages");
+
+    println!("execute_withdraw: Successfully completed");
 
     Ok(Response::new()
         .add_attribute("action", "execute_withdraw")

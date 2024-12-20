@@ -9,7 +9,7 @@ use osmosis_std::types::cosmos::bank::v1beta1::MsgSend;
 use osmosis_std::types::cosmos::base::v1beta1::Coin;
 
 #[test]
-fn withdraw() {
+fn withdraw_logic() {
     let mut deps = init();
     let env = mock_env();
     let mut state = STATE.load(&deps.storage).unwrap();
@@ -28,9 +28,10 @@ fn withdraw() {
         Uint128::from(40_000u128),
     )
     .unwrap();
+    let tom_addr = deps.api.addr_make("tom");
     new_unstake_request(
         &mut deps.as_mut(),
-        "tom".to_string(),
+        tom_addr.to_string(),
         1,
         Uint128::from(90_000u128),
     )
@@ -71,9 +72,7 @@ fn withdraw() {
     let messages = res.unwrap().messages;
     assert_eq!(messages.len(), 2); // withdraw and redemption/purchase rate update
 
-    let msg = QueryMsg::UnstakeRequests {
-        user: deps.api.addr_make("bob"),
-    };
+    let msg = QueryMsg::UnstakeRequests { user: bob_addr };
     let res = query(deps.as_ref(), env.clone(), msg);
     assert!(res.is_ok());
     let resp: Vec<UnstakeRequest> = from_json(res.unwrap()).unwrap();
@@ -166,9 +165,10 @@ fn withdraw_slashing() {
         Uint128::from(40_000u128),
     )
     .unwrap();
+    let tom_addr = deps.api.addr_make("tom");
     new_unstake_request(
         &mut deps.as_mut(),
-        "tom".to_string(),
+        tom_addr.to_string(),
         1,
         Uint128::from(90_000u128),
     )
