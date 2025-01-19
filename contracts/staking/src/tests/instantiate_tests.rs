@@ -114,7 +114,7 @@ mod tests {
         assert!(res.is_err());
 
         let mut msg = get_msg();
-        msg.multisig_address_config.staker_address = Addr::unchecked(OSMO1.to_string());
+        msg.multisig_address_config.staker_address = Addr::unchecked(OSMO1);
         let res = crate::contract::instantiate(
             deps.as_mut(),
             cosmwasm_std::testing::mock_env(),
@@ -124,7 +124,7 @@ mod tests {
         assert!(res.is_err());
 
         let mut msg = get_msg();
-        msg.multisig_address_config.reward_collector_address = Addr::unchecked(OSMO1.to_string());
+        msg.multisig_address_config.reward_collector_address = Addr::unchecked(OSMO1);
         let res = crate::contract::instantiate(
             deps.as_mut(),
             cosmwasm_std::testing::mock_env(),
@@ -279,10 +279,11 @@ mod tests {
             oracle_address: None,
             send_fees_to_treasury: Some(!config.send_fees_to_treasury),
         };
+        let addr = Addr::unchecked(OSMO3);
         crate::contract::execute(
             deps.as_mut(),
             mock_env(),
-            message_info(&Addr::unchecked(OSMO3), &[]),
+            message_info(&addr, &[]),
             config_update_msg,
         )
         .unwrap();

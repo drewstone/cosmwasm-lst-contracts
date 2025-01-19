@@ -23,8 +23,6 @@ use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
 use osmosis_std::types::ibc::applications::transfer::v1::MsgTransfer;
 use osmosis_std::types::ibc::applications::transfer::v1::MsgTransferResponse;
 use osmosis_std::types::osmosis::tokenfactory::v1beta1::{MsgBurn, MsgMint};
-use prost::Message;
-use serde::Deserialize;
 
 pub fn transfer_stake_msg(
     deps: &Deps,
@@ -67,27 +65,59 @@ fn transfer_stake_sub_msg(
     amount: Uint128,
     sub_msg_id: Option<u64>,
 ) -> Result<SubMsg, ContractError> {
+    println!(
+        "transfer_stake_sub_msg: Starting with amount={}, sub_msg_id={:?}",
+        amount, sub_msg_id
+    );
+
     let ibc_msg = transfer_stake_msg(&deps.as_ref(), env, amount)?;
+    println!("transfer_stake_sub_msg: Got IBC message: {:?}", ibc_msg);
+
     let sub_msg_id = sub_msg_id.unwrap_or({
         match env.transaction {
-            Some(ref tx) => tx.index as u64 + env.block.time.nanos(),
-            None => env.block.time.nanos(),
+            Some(ref tx) => {
+                println!(
+                    "transfer_stake_sub_msg: Using tx index {} and block time {}",
+                    tx.index,
+                    env.block.time.nanos()
+                );
+                tx.index as u64 + env.block.time.nanos()
+            }
+            None => {
+                println!(
+                    "transfer_stake_sub_msg: No tx index, using block time {}",
+                    env.block.time.nanos()
+                );
+                env.block.time.nanos()
+            }
         }
     });
+    println!("transfer_stake_sub_msg: Final sub_msg_id={}", sub_msg_id);
 
     let ibc_waiting_for_reply = IbcWaitingForReply {
         amount: amount.into(),
     };
+    println!(
+        "transfer_stake_sub_msg: Created IbcWaitingForReply with amount={}",
+        amount
+    );
 
     save_ibc_waiting_for_reply(deps, sub_msg_id, ibc_waiting_for_reply)?;
+    println!("transfer_stake_sub_msg: Saved IbcWaitingForReply");
 
-    Ok(SubMsg {
+    let sub_msg = SubMsg {
         id: sub_msg_id,
         msg: ibc_msg.into(),
         gas_limit: None,
         reply_on: ReplyOn::Always,
         payload: Binary::new(vec![]),
-    })
+    };
+    println!(
+        "transfer_stake_sub_msg: Created SubMsg with id={}",
+        sub_msg_id
+    );
+
+    Ok(sub_msg)
 }
 
 fn update_oracle_msgs(
@@ -136,12 +166,20 @@ pub fn execute_liquid_stake(
     mint_to: Option<String>,
     expected_mint_amount: Option<Uint128>,
 ) -> ContractResult<Response> {
+    println!(
+        "execute_liquid_stake: Starting with amount={}, mint_to={:?}, expected_mint_amount={:?}",
+        amount, mint_to, expected_mint_amount
+    );
+
     let config = CONFIG.load(deps.storage)?;
+    println!("execute_liquid_stake: Loaded config: {:?}", config);
 
     check_stopped(&config)?;
+    println!("execute_liquid_stake: Contract not stopped");
 
     // a native user address is 43 chars long
     if mint_to.is_none() && info.sender.as_str().len() != 43 {
+        println!("execute_liquid_stake: Error - Missing mint address for non-native sender");
         return Err(ContractError::MissingMintAddress {});
     }
 
@@ -149,13 +187,22 @@ pub fn execute_liquid_stake(
     let mint_to_address = if mint_to.is_some() && info.sender.as_str().len() != 43 {
         let mint_to_addr = mint_to.unwrap();
         validate_address(&mint_to_addr, "osmo")?;
-
+        println!(
+            "execute_liquid_stake: Using provided mint_to address: {}",
+            mint_to_addr
+        );
         mint_to_addr
     } else {
+        println!(
+            "execute_liquid_stake: Using sender as mint_to address: {}",
+            info.sender
+        );
         info.sender.to_string()
     };
 
     let mut state: State = STATE.load(deps.storage)?;
+    println!("execute_liquid_stake: Loaded state: {:?}", state);
+
     ensure!(
         amount >= config.minimum_liquid_stake_amount,
         ContractError::MinimumLiquidStakeAmount {
@@ -163,11 +210,19 @@ pub fn execute_liquid_stake(
             sent_amount: (amount)
         }
     );
+    println!(
+        "execute_liquid_stake: Amount {} meets minimum stake requirement",
+        amount
+    );
 
     // this handles a special case that through slashing and redeeming chaining we get into a state
     // where the total liquid stake is zero but the total native stake is not
     // nobody can claim the native stake, so we need to claim it to the DAO
     if state.total_liquid_stake_token.is_zero() && !state.total_native_token.is_zero() {
+        println!(
+            "execute_liquid_stake: Special case - claiming {} native tokens to DAO fees",
+            state.total_native_token
+        );
         state.total_fees += state.total_native_token;
         state.total_native_token = Uint128::zero();
     }
@@ -178,8 +233,14 @@ pub fn execute_liquid_stake(
         state.total_liquid_stake_token,
         amount,
     );
+    println!(
+        "execute_liquid_stake: Computed mint_amount: {}",
+        mint_amount
+    );
+
     // If mint amount is zero it is likely there was a an issue with rounding, return error and do not mint
     if mint_amount.is_zero() {
+        println!("execute_liquid_stake: Error - Computed mint amount is zero");
         return Err(ContractError::MintError {});
     }
     if let Some(expected_mint_amount) = expected_mint_amount {
@@ -189,6 +250,10 @@ pub fn execute_liquid_stake(
                 expected: expected_mint_amount,
                 actual: mint_amount
             }
+        );
+        println!(
+            "execute_liquid_stake: Mint amount {} meets expected amount {}",
+            mint_amount, expected_mint_amount
         );
     }
 
@@ -202,17 +267,30 @@ pub fn execute_liquid_stake(
             denom: config.liquid_stake_token_denom.clone(),
             amount: mint_amount.to_string(),
         }),
-        mint_to_address,
+        mint_to_address: mint_to_address.clone(),
     };
+    println!("execute_liquid_stake: Created mint message: {:?}", mint_msg);
 
     // Transfer native token to multisig address
     let sub_msg = transfer_stake_sub_msg(&mut deps, &env, amount, None)?;
+    println!(
+        "execute_liquid_stake: Created transfer stake message: {:?}",
+        sub_msg
+    );
+
     let update_oracle_msgs = update_oracle_msgs(deps.as_ref(), env, &config)?;
+    println!(
+        "execute_liquid_stake: Created oracle update messages: {:?}",
+        update_oracle_msgs
+    );
 
     state.total_native_token += amount;
     state.total_liquid_stake_token += mint_amount;
+    println!("execute_liquid_stake: Updated state - total_native_token: {}, total_liquid_stake_token: {}", 
+        state.total_native_token, state.total_liquid_stake_token);
 
     STATE.save(deps.storage, &state)?;
+    println!("execute_liquid_stake: Saved updated state");
 
     Ok(Response::new()
         .add_message(mint_msg)
@@ -409,34 +487,58 @@ pub fn execute_withdraw(
     info: MessageInfo,
     batch_id: u64,
 ) -> ContractResult<Response> {
+    println!("execute_withdraw: Starting with batch_id={}", batch_id);
+
     let config: Config = CONFIG.load(deps.storage)?;
+    println!("execute_withdraw: Loaded config: {:?}", config);
 
     check_stopped(&config)?;
+    println!("execute_withdraw: Contract not stopped");
 
     let _batch = BATCHES.load(deps.storage, batch_id);
     if _batch.is_err() {
+        println!("execute_withdraw: Error - Batch {} not found", batch_id);
         return Err(ContractError::BatchEmpty {});
     }
     let batch = _batch.unwrap();
+    println!("execute_withdraw: Loaded batch: {:?}", batch);
 
     if batch.status != BatchStatus::Received {
+        println!(
+            "execute_withdraw: Error - Tokens already claimed for batch {}",
+            batch.id
+        );
         return Err(ContractError::TokensAlreadyClaimed { batch_id: batch.id });
     }
     let received_native_unstaked = batch.received_native_unstaked.as_ref().unwrap();
+    println!(
+        "execute_withdraw: Received native unstaked amount: {}",
+        received_native_unstaked
+    );
 
     let _liquid_unstake_request =
         unstake_requests().may_load(deps.storage, (batch.id, info.sender.to_string()))?;
     if _liquid_unstake_request.is_none() {
+        println!("execute_withdraw: Error - No unstake request found in batch");
         return Err(ContractError::NoRequestInBatch {});
     }
 
     let unstake_request_amount = _liquid_unstake_request.unwrap().amount;
+    println!(
+        "execute_withdraw: Unstake request amount: {}",
+        unstake_request_amount
+    );
 
     let amount = received_native_unstaked
         .multiply_ratio(unstake_request_amount, batch.batch_total_liquid_stake);
+    println!("execute_withdraw: Calculated withdraw amount: {}", amount);
 
     // TODO: if all liquid unstake requests have been withdrawn, delete the batch?
     remove_unstake_request(&mut deps, info.sender.to_string(), batch.id)?;
+    println!(
+        "execute_withdraw: Removed unstake request for sender {} in batch {}",
+        info.sender, batch.id
+    );
 
     let mut messages: Vec<CosmosMsg> = vec![];
     let send_msg = MsgSend {
@@ -448,8 +550,12 @@ pub fn execute_withdraw(
         }],
     };
     messages.push(send_msg.into());
+    println!("execute_withdraw: Created send message");
 
     let update_oracle_msgs = update_oracle_msgs(deps.as_ref(), env, &config)?;
+    println!("execute_withdraw: Created oracle update messages");
+
+    println!("execute_withdraw: Successfully completed");
 
     Ok(Response::new()
         .add_attribute("action", "execute_withdraw")
@@ -996,6 +1102,7 @@ pub fn handle_ibc_reply(deps: DepsMut, msg: cosmwasm_std::Reply) -> ContractResu
         })?;
 
     let IbcWaitingForReply { amount } = IBC_WAITING_FOR_REPLY.load(deps.storage, msg.id)?;
+
     IBC_WAITING_FOR_REPLY.remove(deps.storage, msg.id);
 
     let recovery = IBCTransfer {
@@ -1015,6 +1122,8 @@ pub fn handle_ibc_reply(deps: DepsMut, msg: cosmwasm_std::Reply) -> ContractResu
             format!("{:?}", transfer_response.sequence),
         );
 
+    println!("handle_ibc_reply: Successfully completed");
+
     Ok(response)
 }
 
@@ -1023,19 +1132,35 @@ fn save_ibc_waiting_for_reply(
     id: u64,
     ibc_msg: IbcWaitingForReply,
 ) -> Result<(), ContractError> {
+    println!(
+        "save_ibc_waiting_for_reply: Starting with id={}, ibc_msg={:?}",
+        id, ibc_msg
+    );
+
     // Check that there isn't anything stored in IBC_WAITING_FOR_REPLY. If there
     // is, it means that the contract is already waiting for a reply and should
     // not override the stored state. This should never happen here, but adding
     // the check for safety. If this happens there is likely a malicious attempt
     // modify the contract's state before it has replied.
     if IBC_WAITING_FOR_REPLY.may_load(deps.storage, id)?.is_some() {
+        println!(
+            "save_ibc_waiting_for_reply: Error - Already waiting for reply with id={}",
+            id
+        );
         return Err(ContractError::ContractLocked {
             msg: "Already waiting for a reply".to_string(),
         });
     }
+    println!(
+        "save_ibc_waiting_for_reply: No existing reply found for id={}",
+        id
+    );
+
     // Store the ibc send information and the user's failed delivery preference
     // so that it can be handled by the response
     IBC_WAITING_FOR_REPLY.save(deps.storage, id, &ibc_msg)?;
+    println!("save_ibc_waiting_for_reply: Successfully saved IBC waiting reply");
+
     Ok(())
 }
 

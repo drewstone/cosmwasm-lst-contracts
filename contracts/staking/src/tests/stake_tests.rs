@@ -14,7 +14,9 @@ mod staking_tests {
     use milky_way::staking::BatchStatus;
     use osmosis_std::types::cosmos::base::v1beta1::Coin;
     use osmosis_std::types::ibc::applications::transfer::v1::MsgTransfer;
+    use osmosis_std::types::ibc::applications::transfer::v1::MsgTransferResponse;
     use osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgMint;
+    use serde::Serialize;
     use std::vec::Vec;
 
     #[test]
@@ -75,9 +77,12 @@ mod staking_tests {
                         payload: Binary::new(vec![]),
                         id: 0,
                         msg: <MsgMint as Into<CosmosMsg>>::into(MsgMint {
-                            sender: Addr::unchecked(MOCK_CONTRACT_ADDR).to_string(),
+                            sender: MOCK_CONTRACT_ADDR.to_string(),
                             amount: Some(Coin {
-                                denom: "factory/cosmos2contract/stTIA".to_string(),
+                                denom: format!(
+                                    "factory/{}/stTIA",
+                                    deps.api.addr_make("cosmos2contract").to_string()
+                                ),
                                 amount: "1000".to_string(),
                             }),
                             mint_to_address: OSMO3.to_string(),
@@ -93,7 +98,10 @@ mod staking_tests {
         }
 
         // need to do this or we can't send more ibc messages
-        // IBC_WAITING_FOR_REPLY.remove(deps.as_mut().storage);
+        let sequence: u64 = 1; // Use a test sequence number
+        let transfer_response = MsgTransferResponse { sequence };
+        let response_data = serde_json::to_vec(&transfer_response).unwrap();
+
         let _result = reply(
             deps.as_mut(),
             mock_env(),
@@ -102,9 +110,9 @@ mod staking_tests {
                 payload: Binary::new(vec![]),
                 id: ibc_sub_msg_id,
                 result: SubMsgResult::Ok(SubMsgResponse {
-                    data: None,
+                    data: Some(Binary::from(response_data)),
                     events: Vec::new(),        // No events
-                    msg_responses: Vec::new(), // No messages
+                    msg_responses: Vec::new(), // No messages needed
                 }),
             },
         );
@@ -214,7 +222,7 @@ mod staking_tests {
             derive_intermediate_sender(CHANNEL_ID, CELESTIA1, "osmo").unwrap();
 
         let info = message_info(
-            &Addr::unchecked(intermediate_sender),
+            &Addr::unchecked(&intermediate_sender),
             &coins(1000, NATIVE_TOKEN),
         );
         let msg: ExecuteMsg = ExecuteMsg::LiquidStake {
@@ -246,10 +254,11 @@ mod staking_tests {
             "osmo",
         )
         .unwrap();
+        let sender_addr = Addr::unchecked(&sender);
         let resp = execute(
             deps.as_mut(),
             env.clone(),
-            message_info(&Addr::unchecked(sender), &coins(1_000, NATIVE_TOKEN)),
+            message_info(&sender_addr, &coins(1_000, NATIVE_TOKEN)),
             ExecuteMsg::ReceiveRewards {},
         );
 
